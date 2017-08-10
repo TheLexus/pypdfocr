@@ -15,7 +15,7 @@
 
 import smtplib
 import argparse
-import sys, os, traceback, time
+import sys, os, traceback, time, re # needed for natural sort
 import logging
 import shutil, glob
 import itertools
@@ -144,6 +144,9 @@ class PyPDFOCR(object):
         
         p.add_argument('--skip-preprocess', action='store_true',
                 default=False, dest='skip_preprocess', help='DEPRECATED: always skips now.')
+        
+        p.add_argument('--splitting', action='store_true',
+                           default=False, dest='splitting', help='Do try to split files automatically.')        
 
         #---------
         # Single or watch mode
@@ -181,6 +184,7 @@ class PyPDFOCR(object):
         self.watch_dir = args.watch_dir
         self.enable_email = args.mail
         self.match_using_filename = args.match_using_filename
+        self.splitting = args.splitting
 
 
         # Deprecating skip_preprocess to make skipping the default (always true). Tesseract 3.04 is so much better now
@@ -191,7 +195,7 @@ class PyPDFOCR(object):
 
         if args.preprocess:
             self.skip_preprocess = False
-
+            
         if self.debug:
             logging.basicConfig(level=logging.DEBUG, format='%(message)s')
 
@@ -306,6 +310,17 @@ class PyPDFOCR(object):
                 keywords = [str(x).lower() for x in keywords]
                 self.filer.add_folder_target(folder, keywords)
 
+        
+        if 'split_pattern' in self.config:
+            self.split_pattern = self.config['split_pattern']
+        else:
+            self.split_pattern = 'TTTTT'
+            
+        if 'filing_pattern' in self.config:
+            self.filer.filing_pattern = self.config['filing_pattern']
+        else:
+            self.pdf_filer.filing_pattern = None
+
         print ("Filing of PDFs is enabled")
         print (" - %d target filing folders" % (folder_count))
         print (" - %d keywords" % (keyword_count))
@@ -320,7 +335,7 @@ class PyPDFOCR(object):
         self.ts = PyTesseract(self.config.get('tesseract',{}))
         self.pdf = PyPdf(self.gs)
         self.preprocess = PyPreprocess(self.config.get('preprocess', {}))
-
+        
         return
 
     def run_conversion(self, pdf_filename):
@@ -358,10 +373,42 @@ class PyPDFOCR(object):
             self.ts.lang = self.lang
             hocr_filenames = self.ts.make_hocr_from_pnms(preprocess_imagefilenames)
             
-            # Generate new pdf with overlayed text
-            #ocr_pdf_filename = self.pdf.overlay_hocr(tiff_dpi, hocr_filename, pdf_filename)
-            ocr_pdf_filename = self.pdf.overlay_hocr_pages(img_dpi, hocr_filenames, pdf_filename)
-
+            # Search for splitting pages and split further processing
+            ocr_pdf_filenames = []
+            if self.splitting == True:
+                hocr_filenames.sort(key=lambda x: self.natural_keys(x[0] ))
+                
+                split_count = 1
+                start_page  = 0
+                end_page    = 0
+                hocr_splitfiles   = []
+                
+                pdf_basename, pdf_filext = os.path.splitext(pdf_filename)
+                for img_filename, hocr_filename in hocr_filenames:
+                    if self.split_pattern in open(hocr_filename).read(): # split on pattern
+                        if last_was_splitted or not len(hocr_splitfiles):
+                            start_page += 1
+                            end_page   += 1
+                            continue
+                        
+                        ocr_pdf_filenames.append(self.pdf.overlay_hocr_pages(img_dpi, hocr_splitfiles, pdf_filename, split_count, start_page , end_page-1))
+                        
+                        split_count += 1
+                        end_page    += 1
+                        start_page        = end_page
+                        hocr_splitfiles   = []
+                        last_was_splitted = True
+                    else:
+                        hocr_splitfiles.append((img_filename, hocr_filename))
+                        last_was_splitted = False
+                        end += 1
+                        
+                # process tail
+                if len(hocr_splitfiles): 
+                    ocr_pdf_filenames.append(self.pdf.overlay_hocr_pages(img_dpi, hocr_splitfiles, pdf_filename, split_count,start_page, end_page-1))
+            else:
+                ocr_pdf_filenames.append(self.pdf.overlay_hocr_pages(img_dpi, hocr_filenames, pdf_filename))
+            
         finally:
             # Clean up the files
             time.sleep(1)
@@ -384,8 +431,8 @@ class PyPDFOCR(object):
                     #self._clean_up_files([x[1].replace(".hocr", ".txt") for x in hocr_filenames])
 
 
-        print ("Completed conversion successfully to %s" % ocr_pdf_filename)
-        return ocr_pdf_filename
+        print ("Completed conversion successfully to %s" % ocr_pdf_filenames)
+        return ocr_pdf_filenames
 
     def file_converted_file(self, ocr_pdffilename, original_pdffilename):
         """ move the converted filename to its destiantion directory.  Optionally also
@@ -473,18 +520,38 @@ class PyPDFOCR(object):
         else:
             self._convert_and_file_email(self.pdf_filename)
 
-    def _convert_and_file_email(self, pdf_filename):
+    def _convert_and_file_email(self, pdf_filename_orig):
         """
             Helper function to run the conversion, then do the optional filing, and optional emailing.
         """
-        ocr_pdffilename = self.run_conversion(pdf_filename)
-        if self.enable_filing:
-            filing = self.file_converted_file(ocr_pdffilename, pdf_filename)
+        # Do splitting
+        if self.splitting:
+            fns = self.splitting.split(pdf_filename_orig)          
         else:
-            filing = "None"
+            fns = [pdf_filename_orig]
+        
+        for pdf_filename in fns:
+            ocr_pdffilenames = self.run_conversion(pdf_filename)
+            for ocr_pdffilename in ocr_pdffilenames:
+                if self.enable_filing:
+                    filing = self.file_converted_file(ocr_pdffilename, pdf_filename)
+                else:
+                    filing = "None"
+        
+                    if self.enable_email:
+                        self._send_email(pdf_filename, ocr_pdffilename, filing)
+            
+    # needed for natural sort before split
+    def _atoi(self,text):
+        return int(text) if text.isdigit() else text
 
-        if self.enable_email:
-            self._send_email(pdf_filename, ocr_pdffilename, filing)
+    def natural_keys(self, text):
+        '''
+        alist.sort(key=natural_keys) sorts in human order
+        http://nedbatchelder.com/blog/200712/human_sorting.html
+        (See Toothy's implementation in the comments)
+        '''
+        return [ self._atoi(c) for c in re.split('(\d+)', text) ]    
 
 def main(): # pragma: no cover 
     multiprocessing.freeze_support()

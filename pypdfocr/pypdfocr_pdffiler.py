@@ -53,7 +53,9 @@ class PyPdfFiler(object):
         for folder,strings in self.filer.folder_targets.items():
             for s in strings:
                 logging.debug("Checking string %s" % s)
-                if s in searchText:
+                # support regex matching (should work for simple strings as well)
+                # if s in searchText:
+                if re.search(s, searchText, re.M):
                     logging.info("Matched keyword '%s'" % s)
                     return folder
         # No match found, so return 
@@ -69,10 +71,10 @@ class PyPdfFiler(object):
 
         if not tgt_folder and self.file_using_filename:
             tgt_folder = self._get_matching_folder(filename)
-
+            
         tgt_file = self.filer.move_to_matching_folder(filename, tgt_folder)
         return tgt_file
-        
+    
 if __name__ == '__main__':
     p = PyPdfFiler(PyFilerDirs())
     for page_text in p.iter_pdf_page_text("scan_ocr.pdf"):

@@ -16,6 +16,9 @@ import logging
 import os
 import shutil
 
+from datetime import datetime
+from time import time
+
 from pypdfocr_filer import PyFiler
 
 """
@@ -29,6 +32,7 @@ class PyFilerDirs(PyFiler):
         self.default_folder = None
         self.original_move_folder = None
         self.folder_targets = {}
+        self.filing_pattern = None        
 
     def add_folder_target(self, folder, keywords):
         assert folder not in self.folder_targets, "Target folder already defined! (%s)" % (folder)
@@ -50,7 +54,7 @@ class PyFilerDirs(PyFiler):
     def move_to_matching_folder(self, filename, foldername):
         assert self.target_folder != None
         assert self.default_folder != None
-
+        
         if not foldername:
             logging.info("[DEFAULT] %s --> %s" % (filename, self.default_folder))
             tgt_path = os.path.join(self.target_folder, self.default_folder)
@@ -61,12 +65,28 @@ class PyFilerDirs(PyFiler):
         if not os.path.exists(tgt_path):
             logging.debug("Making path %s" % tgt_path)
             os.makedirs(tgt_path)
-
+        
         logging.debug("Moving %s to %s" % (filename, tgt_path))
-        tgtfilename = os.path.join(tgt_path, os.path.basename(filename))
+        
+        new_filename = self.create_tgtfilename(filename)        
+            
+        tgtfilename = os.path.join(tgt_path, os.path.basename(new_filename))
         tgtfilename = self._get_unique_filename_by_appending_version_integer(tgtfilename)
 
         shutil.move(filename, tgtfilename)
         return tgtfilename
 
-
+    def create_tgtfilename(self, original_filename):
+        # rename file if requested
+        if not self.filing_pattern:
+            return original_filename
+        
+        pdf_dir, pdf_basename = os.path.split(original_filename)
+        basename = os.path.splitext(pdf_basename)[0]
+        
+        today = datetime.now()
+        now  = today.time()
+        
+        new_basename = self.filing_pattern.format(filename=basename, day=today.day, month=today.month, year=today.year, hour=now.hour, minute=now.minute, second=now.second)    
+        
+        return os.path.join(pdf_dir, "%s.pdf" % (new_basename))    

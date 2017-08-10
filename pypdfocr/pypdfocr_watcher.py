@@ -93,7 +93,7 @@ class PyPdfWatcher(FileSystemEventHandler):
 
         """
         if ev_path.endswith(".pdf"):
-            if not ev_path.endswith(("_ocr.pdf", "_test.pdf")):
+            if not ev_path.endswith(("_ocr.pdf", "_text.pdf")): # filter _teXt and not _teSt
                 PyPdfWatcher.events_lock.acquire()
                 if not ev_path in PyPdfWatcher.events:
                     PyPdfWatcher.events[ev_path] = time.time()

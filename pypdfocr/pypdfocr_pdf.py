@@ -129,7 +129,7 @@ class PyPdf(object):
                                                  ctm[1][0], ctm[1][1],
                                                  ctm[2][0], ctm[2][1]])
 
-    def overlay_hocr_pages(self, dpi, hocr_filenames, orig_pdf_filename):
+    def overlay_hocr_pages(self, dpi, hocr_filenames, orig_pdf_filename, counter=None, start=None, end=None):
         
         logging.debug("Going to overlay following files onto %s" % orig_pdf_filename)
         # Sort the hocr_filenames into natural keys!
@@ -138,8 +138,11 @@ class PyPdf(object):
 
         pdf_dir, pdf_basename = os.path.split(orig_pdf_filename)
         basename = os.path.splitext(pdf_basename)[0]
-        pdf_filename = os.path.join(pdf_dir, "%s_ocr.pdf" % (basename))
-
+	if counter != None:
+	    pdf_filename = os.path.join(pdf_dir, "%s_ocr_%d.pdf" % (basename,counter))
+	else:
+	    pdf_filename = os.path.join(pdf_dir, "%s_ocr.pdf" % (basename))
+	    
         text_pdf_filenames = []
         for img_filename, hocr_filename in hocr_filenames:
             text_pdf_filename = self.overlay_hocr_page(dpi, hocr_filename, img_filename)
@@ -157,12 +160,11 @@ class PyPdf(object):
         merger.close()
 	del merger
 
-
         writer = PdfFileWriter()
         orig = open(orig_pdf_filename, 'rb')
         text_file = open(all_text_filename, 'rb')
 
-        for orig_pg, text_pg in zip(self.iter_pdf_page(orig), self.iter_pdf_page(text_file)):
+        for orig_pg, text_pg in zip(self.iter_pdf_page(orig, start, end), self.iter_pdf_page(text_file, None, None)):
             orig_pg = self._get_merged_single_page(orig_pg, text_pg)
             writer.addPage(orig_pg)
 
@@ -249,11 +251,12 @@ class PyPdf(object):
         os.chdir(cwd)
         return os.path.join(hocr_dir, pdf_filename)
 
-    def iter_pdf_page(self, f):
+    def iter_pdf_page(self, f, start=None, end=None):
         reader = PdfFileReader(f)
         for pgnum in range(reader.getNumPages()):
-            pg = reader.getPage(pgnum)
-            yield pg
+	    if start == None or (pgnum >= start and pgnum <= end):
+		pg = reader.getPage(pgnum)
+		yield pg
 
     def _atoi(self,text):
         return int(text) if text.isdigit() else text
