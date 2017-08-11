@@ -530,7 +530,7 @@ class PyPDFOCR(object):
         else:
             self._convert_and_file_email(self.pdf_filename)
 
-    def _convert_and_file_email(self, pdf_filename_orig):
+    def _convert_and_file_email(self, pdf_filename):
         """
             Helper function to run the conversion, then do the optional filing, and optional emailing.
         """
