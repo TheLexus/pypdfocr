@@ -55,7 +55,7 @@ class PyPdfFiler(object):
                 logging.debug("Checking string %s" % s)
                 # support regex matching (should work for simple strings as well)
                 # if s in searchText:
-                if re.search(s, searchText, re.M):
+                if re.search(s, searchText, re.MULTILINE | re.DOTALL):
                     logging.info("Matched keyword '%s'" % s)
                     return folder
         # No match found, so return 
