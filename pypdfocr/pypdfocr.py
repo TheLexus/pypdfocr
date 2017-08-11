@@ -24,6 +24,9 @@ from functools import wraps
 from version import __version__
 from PIL import Image
 import yaml
+import yaml.constructor
+
+from collections import OrderedDict
 
 import multiprocessing
 # Replace the Popen routine to allow win32 pyinstaller to build
@@ -63,6 +66,43 @@ def open_file_with_timeout(parser, arg):
     f = open(arg, 'r')
     return f
 
+# Helper to have 'folders' loaded from configuration i a defined order (upper folder configuration has higher priority)
+class OrderedDictYAMLLoader(yaml.Loader):
+    """
+    A YAML loader that loads mappings into ordered dictionaries.
+    """
+
+    def __init__(self, *args, **kwargs):
+        yaml.Loader.__init__(self, *args, **kwargs)
+
+        self.add_constructor(u'tag:yaml.org,2002:map', type(self).construct_yaml_map)
+        #self.add_constructor(u'tag:yaml.org,2002:omap', type(self).construct_yaml_map)
+
+    def construct_yaml_map(self, node):
+        data = OrderedDict()
+        yield data
+        value = self.construct_mapping(node)
+        data.update(value)
+
+    def construct_mapping(self, node, deep=False):
+        if isinstance(node, yaml.MappingNode):
+            self.flatten_mapping(node)
+        else:
+            raise yaml.constructor.ConstructorError(None, None,
+                'expected a mapping node, but found %s' % node.id, node.start_mark)
+
+        mapping = OrderedDict()
+        for key_node, value_node in node.value:
+            key = self.construct_object(key_node, deep=deep)
+            try:
+                hash(key)
+            except TypeError, exc:
+                raise yaml.constructor.ConstructorError('while constructing a mapping',
+                    node.start_mark, 'found unacceptable key (%s)' % exc, key_node.start_mark)
+            value = self.construct_object(value_node, deep=deep)
+            mapping[key] = value
+        return mapping
+
 """
     Make scanned PDFs searchable using Tesseract-OCR and autofile them
 .. automodule:: pypdfocr
@@ -88,7 +128,7 @@ class PyPDFOCR(object):
         """ Initializes the GhostScript, Tesseract, and PDF helper classes.
         """
         self.config = {}
-
+        
     def _get_config_file(self, config_file):
         """
            Read in the yaml config file
@@ -99,7 +139,7 @@ class PyPDFOCR(object):
            :rtype: dict
         """
         with config_file:
-            myconfig = yaml.load(config_file)
+            myconfig = yaml.load(config_file, OrderedDictYAMLLoader)
         return myconfig
 
 
@@ -148,7 +188,7 @@ class PyPDFOCR(object):
         p.add_argument('--splitting', action='store_true',
                            default=False, dest='splitting', help='Do try to split files automatically.')    
         
-        p.add_argument('--remove', action='store_false',
+        p.add_argument('--remove', action='store_true',
                            default=False, dest='remove', help='Do remove original file after filing.')           
 
         #---------

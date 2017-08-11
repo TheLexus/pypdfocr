@@ -16,6 +16,7 @@ import logging
 import os
 import shutil
 
+import collections
 from datetime import datetime
 from time import time
 
@@ -31,8 +32,8 @@ class PyFilerDirs(PyFiler):
         self.target_folder = None
         self.default_folder = None
         self.original_move_folder = None
-        self.folder_targets = {}
-        self.filing_pattern = None        
+        self.folder_targets = collections.OrderedDict() # use order to have folders at a predictible order
+        self.filing_pattern = None     
         self.remove_original = False
 
     def add_folder_target(self, folder, keywords):
@@ -44,8 +45,10 @@ class PyFilerDirs(PyFiler):
             if self.original_remove:
                 try:
                     os.remove(original_filename)
+                    logging.debug("Removed original")
                 except:
                     logging.debug("Error removing file %s ...." % original_filename)
+                return original_filename                
             else:
                 logging.debug("Leaving original untouched")
                 return original_filename
@@ -56,12 +59,6 @@ class PyFilerDirs(PyFiler):
         tgtfilename = self._get_unique_filename_by_appending_version_integer(tgtfilename)
 
         shutil.move(original_filename, tgtfilename)
-        
-        if self.original_remove:
-            try:
-                os.remove(original_filename)
-            except:
-                logging.debug("Error removing file %s ...." % original_filename)
         
         return tgtfilename
 
