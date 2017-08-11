@@ -411,7 +411,7 @@ class PyPDFOCR(object):
                     else:
                         hocr_splitfiles.append((img_filename, hocr_filename))
                         last_was_splitted = False
-                        end += 1
+                        end_page += 1
                         
                 # process tail
                 if len(hocr_splitfiles): 
