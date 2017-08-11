@@ -146,7 +146,10 @@ class PyPDFOCR(object):
                 default=False, dest='skip_preprocess', help='DEPRECATED: always skips now.')
         
         p.add_argument('--splitting', action='store_true',
-                           default=False, dest='splitting', help='Do try to split files automatically.')        
+                           default=False, dest='splitting', help='Do try to split files automatically.')    
+        
+        p.add_argument('--remove', action='store_false',
+                           default=False, dest='remove', help='Do remove original file after filing.')           
 
         #---------
         # Single or watch mode
@@ -185,6 +188,7 @@ class PyPDFOCR(object):
         self.enable_email = args.mail
         self.match_using_filename = args.match_using_filename
         self.splitting = args.splitting
+        self.original_remove = args.remove
 
 
         # Deprecating skip_preprocess to make skipping the default (always true). Tesseract 3.04 is so much better now
@@ -212,6 +216,11 @@ class PyPDFOCR(object):
             self.enable_evernote = True
         else:
             self.enable_evernote = False
+
+        if args.remove:
+            self.original_remove = True
+        else:
+            self.original_remove = False
 
         if args.enable_filing or args.enable_evernote:
             self.enable_filing = True
@@ -290,6 +299,7 @@ class PyPDFOCR(object):
         self.filer.target_folder = self.config['target_folder']
         self.filer.default_folder = self.config['default_folder']
         self.filer.original_move_folder = original_move_folder
+        self.filer.original_remove = self.original_remove
 
         self.pdf_filer = PyPdfFiler(self.filer)
         if self.match_using_filename:
@@ -524,22 +534,15 @@ class PyPDFOCR(object):
         """
             Helper function to run the conversion, then do the optional filing, and optional emailing.
         """
-        # Do splitting
-        if self.splitting:
-            fns = self.splitting.split(pdf_filename_orig)          
-        else:
-            fns = [pdf_filename_orig]
-        
-        for pdf_filename in fns:
-            ocr_pdffilenames = self.run_conversion(pdf_filename)
-            for ocr_pdffilename in ocr_pdffilenames:
-                if self.enable_filing:
-                    filing = self.file_converted_file(ocr_pdffilename, pdf_filename)
-                else:
-                    filing = "None"
-        
-                    if self.enable_email:
-                        self._send_email(pdf_filename, ocr_pdffilename, filing)
+        ocr_pdffilenames = self.run_conversion(pdf_filename)
+        for ocr_pdffilename in ocr_pdffilenames:
+            if self.enable_filing:
+                filing = self.file_converted_file(ocr_pdffilename, pdf_filename)
+            else:
+                filing = "None"
+    
+                if self.enable_email:
+                    self._send_email(pdf_filename, ocr_pdffilename, filing)
             
     # needed for natural sort before split
     def _atoi(self,text):

@@ -33,6 +33,7 @@ class PyFilerDirs(PyFiler):
         self.original_move_folder = None
         self.folder_targets = {}
         self.filing_pattern = None        
+        self.remove_original = False
 
     def add_folder_target(self, folder, keywords):
         assert folder not in self.folder_targets, "Target folder already defined! (%s)" % (folder)
@@ -40,8 +41,14 @@ class PyFilerDirs(PyFiler):
 
     def file_original(self, original_filename):
         if not self.original_move_folder:
-            logging.debug("Leaving original untouched")
-            return original_filename
+            if self.original_remove:
+                try:
+                    os.remove(original_filename)
+                except:
+                    logging.debug("Error removing file %s ...." % original_filename)
+            else:
+                logging.debug("Leaving original untouched")
+                return original_filename
 
         tgt_path = self.original_move_folder
         logging.debug("Moving original %s to %s" % (original_filename, tgt_path))
@@ -49,6 +56,13 @@ class PyFilerDirs(PyFiler):
         tgtfilename = self._get_unique_filename_by_appending_version_integer(tgtfilename)
 
         shutil.move(original_filename, tgtfilename)
+        
+        if self.original_remove:
+            try:
+                os.remove(original_filename)
+            except:
+                logging.debug("Error removing file %s ...." % original_filename)
+        
         return tgtfilename
 
     def move_to_matching_folder(self, filename, foldername):
