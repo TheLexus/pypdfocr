@@ -139,7 +139,7 @@ class PyPdf(object):
         pdf_dir, pdf_basename = os.path.split(orig_pdf_filename)
         basename = os.path.splitext(pdf_basename)[0]
 	if counter != None:
-	    pdf_filename = os.path.join(pdf_dir, "%s_ocr_%d.pdf" % (basename,counter))
+	    pdf_filename = os.path.join(pdf_dir, "%s_%d_ocr.pdf" % (basename,counter))
 	else:
 	    pdf_filename = os.path.join(pdf_dir, "%s_ocr.pdf" % (basename))
 	    
